@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>言葉ラボ — Kotoba Labo</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1115">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kotoba Labo">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --border:#2a2f3a;
+    --text:#eef0f4; --text-dim:#a9afbc; --text-faint:#6b7280;
+    --accent:#5b8cff; --accent2:#8b5bff;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'Zen Kaku Gothic New', system-ui, sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding:24px;
+  }
+  .wrap{ max-width:480px; width:100%; }
+  .hero{ text-align:center; margin-bottom:44px; }
+  .hero .mark{ font-family:'Shippori Mincho', serif; font-size:44px; font-weight:700; letter-spacing:.04em; }
+  .hero .sub{ display:block; margin-top:6px; color:var(--text-dim); font-family:'Space Grotesk', sans-serif; font-size:15px; letter-spacing:.08em; text-transform:uppercase; }
+  .modes{ display:flex; flex-direction:column; gap:16px; }
+  a.mode-card{
+    display:flex; flex-direction:row; align-items:center; justify-content:flex-start; gap:18px;
+    text-align:left; text-decoration:none; color:#ffffff;
+    border-radius:16px; border:1px solid transparent;
+    padding:22px 26px;
+    transition:transform .15s ease, filter .15s ease;
+  }
+  a.mode-card:hover{ transform:translateY(-2px); filter:brightness(1.08); }
+  a.mode-card.pitch-drill{ background:#2554d6; }
+  a.mode-card.bunkei{ background:#7c3aed; }
+  a.mode-card.jisho{ background:#0ea56f; }
+  .mode-card .jp{ font-family:'Shippori Mincho', serif; font-size:40px; font-weight:700; color:#ffffff; line-height:1.1; }
+  .mode-card .en{ display:block; margin-top:4px; font-family:'Space Grotesk', sans-serif; font-size:16px; font-weight:600; color:#ffffff; letter-spacing:.06em; text-transform:uppercase; opacity:.92; }
+  .footer-note{ text-align:center; margin-top:36px; font-size:12px; color:var(--text-faint); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="mark">言葉ラボ</div>
+      <span class="sub">Kotoba Labo</span>
+    </div>
+    <div class="modes">
+      <a class="mode-card jisho" href="modes/jisho/index.html">
+        <div class="jp">辞書</div>
+        <span class="en">Dictionary</span>
+      </a>
+      <a class="mode-card pitch-drill" href="modes/pitch_drill/index.html">
+        <div class="jp">高低</div>
+        <span class="en">Pitch Accent</span>
+      </a>
+      <a class="mode-card bunkei" href="modes/bunkei/index.html">
+        <div class="jp">文型</div>
+        <span class="en">Grammar</span>
+      </a>
+    </div>
+    <div class="footer-note">KotobaLabo_v2.0</div>
+  </div>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch((err) => {
+        console.warn('Service worker registration failed:', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
