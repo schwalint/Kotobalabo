@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>辞書 — Jisho</title>
 <link rel="manifest" href="../../manifest.json">
 <meta name="theme-color" content="#0f1115">
@@ -264,6 +264,63 @@
   .modal-box .modal-title{ font-family:'Shippori Mincho',serif; font-size:20px; font-weight:700; margin-bottom:14px; }
   ::-webkit-scrollbar{ width:8px; }
   ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px; }
+
+/* ============================================================
+   MOBILE RESPONSIVE OVERRIDES (added v2.0)
+   Scoped entirely to <768px via this single media query. Nothing
+   above this block is touched, so tablet/desktop (>=768px) layout,
+   spacing and typography are unchanged -- 0% regression there.
+   ============================================================ */
+@media (max-width: 767px){
+  .app{ padding:0 10px 60px; }
+
+  /* --- Header: mode title (row 1) + tab nav (row 2), max 2 rows --- */
+  header.top{ padding:14px 0 0; margin-bottom:14px; gap:8px; }
+  .brand-row{ gap:8px; }
+  .brand{ gap:8px; }
+  .brand .mark{ font-size:clamp(18px, 5.5vw, 22px); letter-spacing:1px; }
+  .brand .sub{ font-size:9px; letter-spacing:2px; }
+  .hamburger-btn{ width:24px; height:24px; font-size:14px; }
+
+  nav.tabs{
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    -ms-overflow-style:none;
+    gap:2px;
+    margin:0 -4px;
+    padding:0 4px 2px;
+  }
+  nav.tabs::-webkit-scrollbar{ display:none; }
+  nav.tabs button{
+    flex:0 0 auto;
+    font-size:11px;
+    padding:7px 10px;
+    letter-spacing:0.2px;
+    white-space:nowrap;
+  }
+
+  /* --- Global proportional scaling: padding, gaps, buttons, inputs --- */
+  .home-section{ padding:14px; margin-bottom:14px; border-radius:14px; }
+  .home-section-title{ gap:8px; margin-bottom:10px; }
+  .stat-row{ gap:8px; }
+  .widget-header-right{ gap:8px; }
+
+  .btn{ padding:10px 14px; font-size:12px; }
+  input[type=text], input[type=number], input[type=password], select{
+    padding:10px 12px; font-size:14px;
+  }
+  .search-box{ gap:6px; }
+
+  .settings-row{ padding:12px 14px; gap:10px; }
+  .prompt-box{ padding:14px; }
+  .prompt-actions{ gap:8px; }
+  .modal-box{ padding:18px; }
+  .modal-actions{ gap:8px; }
+  .option-grid, .pitch-choice-grid{ gap:8px; }
+  .source-picker, .passage-toolbar{ gap:8px; }
+}
 </style>
 </head>
 <body>
