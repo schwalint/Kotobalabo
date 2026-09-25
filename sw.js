@@ -1,10 +1,15 @@
 // Kotoba Labo service worker.
-// Bump CACHE_VERSION whenever the app shell (HTML/CSS/JS in this file's own
-// scope) changes, so returning users actually get the new version instead
-// of a stale cached copy.
-const CACHE_VERSION = 'v2.0.0';
-const SHELL_CACHE = `kotoba-labo-shell-${CACHE_VERSION}`;
-const DATA_CACHE = `kotoba-labo-data-${CACHE_VERSION}`;
+// SHELL_VERSION and DATA_VERSION are separate on purpose: the shell (this
+// app's own HTML/CSS/JS) changes often as features get fixed, while the
+// data/ files (dictionaries, audio) almost never do. Bump SHELL_VERSION
+// whenever the app itself changes; only bump DATA_VERSION when the actual
+// data/ files change. Bumping one never forces users to re-download the
+// other -- in particular, a shell update never re-triggers the ~150MB+ of
+// data downloads.
+const SHELL_VERSION = 'v2.0.2';
+const DATA_VERSION = 'v2.0.0';
+const SHELL_CACHE = `kotoba-labo-shell-${SHELL_VERSION}`;
+const DATA_CACHE = `kotoba-labo-data-${DATA_VERSION}`;
 
 // Only the small app-shell files are precached at install time. The data/
 // files (dictionaries, audio -- well over 100MB combined) are deliberately
@@ -43,6 +48,51 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Every file under data/ that any mode ever loads, eager or lazy -- the full
+// "download for offline" set. Kept here (rather than duplicated in each
+// page) so there's exactly one place that knows the whole file list and the
+// one true DATA_CACHE name to put them in.
+const ALL_DATA_FILES = [
+  'data.js', 'freq.js', 'glosses.js', 'jp_glosses.js', 'names.js',
+  'user_audio.js', 'jlpt_vocab_tags.js', 'jlpt_grammar.js',
+  'freq_vocab_cloze_examples.js', 'kanji_dict.js', 'anki_word_audio.js',
+  'shared_sentences.json'
+];
+
+// "Download for offline" support: a page asks for this via postMessage
+// (see the button on the landing page) instead of just looping fetch()
+// itself, so the caching logic and the DATA_CACHE name stay defined in
+// exactly one place. Files already cached (e.g. from ordinary browsing)
+// are skipped instantly -- only what's actually missing gets fetched.
+self.addEventListener('message', (event) => {
+  if (!event.data || event.data.type !== 'CACHE_ALL_DATA') return;
+  const client = event.source;
+  const total = ALL_DATA_FILES.length;
+  event.waitUntil((async () => {
+    const cache = await caches.open(DATA_CACHE);
+    for (let i = 0; i < total; i++) {
+      const name = ALL_DATA_FILES[i];
+      const url = new URL(`./data/${name}`, self.location.href).toString();
+      let ok = true;
+      try {
+        const already = await cache.match(url);
+        if (!already) {
+          const res = await fetch(url, { cache: 'reload' });
+          if (res && res.ok) {
+            await cache.put(url, res);
+          } else {
+            ok = false;
+          }
+        }
+      } catch (e) {
+        ok = false;
+      }
+      if (client) client.postMessage({ type: 'CACHE_ALL_DATA_PROGRESS', done: i + 1, total, file: name, ok });
+    }
+    if (client) client.postMessage({ type: 'CACHE_ALL_DATA_DONE' });
+  })());
+});
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -55,7 +105,8 @@ self.addEventListener('fetch', (event) => {
   if (isDataFile) {
     // Cache-first, long-lived: these files are large and effectively
     // immutable per release, so once cached they're served instantly and
-    // work offline. A fresh deploy should bump CACHE_VERSION to invalidate.
+    // work offline. Only bump DATA_VERSION above if these files themselves
+    // are ever regenerated/changed.
     event.respondWith(
       caches.open(DATA_CACHE).then((cache) =>
         cache.match(req).then((cached) => {

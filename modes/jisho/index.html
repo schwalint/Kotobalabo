@@ -96,8 +96,8 @@
   .word-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--bg-card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; cursor:pointer; transition:border-color .15s ease; }
   .word-row:hover{ border-color:var(--text-faint); }
   .word-row .wleft{ display:flex; align-items:flex-start; gap:4px; min-width:0; flex:1 1 auto; }
-  .word-row .wtext{ font-family:'Shippori Mincho',serif; font-size:19px; white-space:nowrap; }
-  .word-row .wreading{ font-size:11px; color:var(--text-dim); margin-top:2px; }
+  .word-row .wtext{ font-family:'Shippori Mincho',serif; font-size:19px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+  .word-row .wreading{ font-size:11px; color:var(--text-dim); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
   .word-row .srs-badge{ font-size:10px; color:var(--good); margin-top:2px; font-family:'Space Grotesk',sans-serif; }
   .row-def-preview{ font-size:13px; color:var(--text-dim); white-space:normal; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; max-width:100%; margin-top:4px; }
   .pattern-name-badge{ font-family:'Space Grotesk',sans-serif; font-size:10px; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px; margin-top:4px; }
@@ -304,7 +304,10 @@
   /* --- Global proportional scaling: padding, gaps, buttons, inputs --- */
   .home-section{ padding:14px; margin-bottom:14px; border-radius:14px; }
   .home-section-title{ gap:8px; margin-bottom:10px; }
-  .stat-row{ gap:8px; }
+  .stat-row{ gap:6px; flex-wrap:nowrap; }
+  .stat-card{ min-width:0; flex:1 1 0; padding:10px 4px; border-radius:10px; }
+  .stat-card .num{ font-size:17px; }
+  .stat-card .label{ font-size:8.5px; letter-spacing:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .widget-header-right{ gap:8px; }
 
   .btn{ padding:10px 14px; font-size:12px; }
@@ -447,12 +450,19 @@
   </div>
 </div>
 
+<!-- v2.0 loading-speed fix: only the data actually needed to show search
+     results and English definitions the instant this page opens loads
+     eagerly here (~38MB, down from ~187MB). jp_glosses.js (Japanese-language
+     definitions -- an alternate/supplementary view, guarded with `typeof
+     JP_GLOSS_DATA !== 'undefined'` everywhere it's read), names.js,
+     anki_word_audio.js (the ~100MB audio library, now fully on-demand -- see
+     ensureAnkiAudio), jlpt_grammar.js and freq_vocab_cloze_examples.js are
+     all likewise guarded and never touched during initial render, so
+     they've been moved out of this blocking list (see the end of body) and
+     no longer delay the page becoming interactive. -->
 <script src="../../data/data.js"></script>
 <script src="../../data/freq.js"></script>
 <script src="../../data/glosses.js"></script>
-<script src="../../data/jp_glosses.js"></script>
-<script src="../../data/names.js"></script>
-<script src="../../data/anki_word_audio.js"></script>
 <script src="../../data/user_audio.js"></script>
 <script src="../../data/jlpt_vocab_tags.js"></script>
 <script>
@@ -6582,6 +6592,34 @@ function playNoAudioClick(){
 function katakanaToHiragana(str){
   return str.replace(/[\u30a1-\u30f6]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60));
 }
+// v2.0 loading-speed fix: anki_word_audio.js alone is ~100MB (base64 MP3s
+// for every word), by far the single biggest chunk of this app's payload.
+// It used to load eagerly with the rest of the dictionary data, meaning
+// every visit -- even one that never presses a play button -- paid for the
+// whole audio library before the page could become interactive. It's now
+// loaded on demand, the first time playWordAudio actually needs it, exactly
+// like KANJI_DICT already does for kanji breakdowns (see ensureKanjiDict).
+let _ankiAudioLoadState = 'unloaded'; // 'unloaded' | 'loading' | 'loaded' | 'error'
+let _ankiAudioWaiters = [];
+function ensureAnkiAudio(callback){
+  if(_ankiAudioLoadState === 'loaded' || _ankiAudioLoadState === 'error'){ callback(); return; }
+  _ankiAudioWaiters.push(callback);
+  if(_ankiAudioLoadState === 'loading') return;
+  _ankiAudioLoadState = 'loading';
+  const script = document.createElement('script');
+  script.src = '../../data/anki_word_audio.js';
+  script.onload = ()=>{
+    _ankiAudioLoadState = 'loaded';
+    const waiters = _ankiAudioWaiters; _ankiAudioWaiters = [];
+    waiters.forEach(cb=>cb());
+  };
+  script.onerror = ()=>{
+    _ankiAudioLoadState = 'error';
+    const waiters = _ankiAudioWaiters; _ankiAudioWaiters = [];
+    waiters.forEach(cb=>cb());
+  };
+  document.head.appendChild(script);
+}
 function findAnkiWordAudio(expr, reading){
   if(typeof ANKI_WORD_AUDIO === 'undefined') return null;
   const kana = reading || expr;
@@ -6669,56 +6707,64 @@ function playWordAudio(expr, reading, btnEl, onComplete){
   // needed here, since this is known-good data, not a third-party lookup
   // that might silently return a placeholder clip. Uses audioExpr (the
   // kanji-numeral form for つ/月 cards) so 1つ finds the same real audio
-  // that's already there for 一つ.
-  const ankiAudio = findAnkiWordAudio(audioExpr, reading);
-  if(ankiAudio){
-    if(btnEl){ btnEl.textContent = '⏳ Loading…'; btnEl.disabled = true; }
-    const audio = new Audio('data:audio/mpeg;base64,' + ankiAudio);
+  // that's already there for 一つ. The ~100MB audio dataset itself is only
+  // fetched here, on first actual use (see ensureAnkiAudio above) -- so the
+  // button shows "Loading..." a little longer than usual the very first
+  // time any audio is played in a session, in exchange for the rest of the
+  // app never having to wait on it.
+  if(btnEl){ btnEl.textContent = '⏳ Loading…'; btnEl.disabled = true; }
+  ensureAnkiAudio(()=>{
+    const ankiAudio = findAnkiWordAudio(audioExpr, reading);
+    if(ankiAudio){
+      const audio = new Audio('data:audio/mpeg;base64,' + ankiAudio);
+      audio.addEventListener('canplaythrough', ()=>{
+        if(btnEl){ btnEl.disabled = false; btnEl.textContent = originalText; }
+        audio.play().catch(()=>{});
+        audio.addEventListener('ended', finish, { once:true });
+      }, { once:true });
+      audio.addEventListener('error', ()=>{
+        if(btnEl){ btnEl.disabled = false; btnEl.textContent = originalText; }
+        finish();
+      }, { once:true });
+      return;
+    }
+    if(audioAvailabilityCache.get(key) === false){
+      if(btnEl) btnEl.disabled = false;
+      playTTSFallback(reading, btnEl, originalText, finish);
+      return;
+    }
+    const audio = new Audio(audioURLFor(audioExpr, reading));
+    audio.preload = 'auto';
+    let settled = false;
+    // This audio source returns a real, playable MP3 even for words it
+    // doesn't have -- a spoken message saying the recording isn't available
+    // yet, rather than a proper HTTP error. Since that can't be distinguished
+    // from real audio by the request succeeding, this uses duration as a
+    // practical heuristic instead: genuine single-word pronunciations are
+    // short, while that placeholder message is a longer spoken sentence.
+    audio.addEventListener('loadedmetadata', ()=>{
+      if(settled) return;
+      if(audio.duration && audio.duration > 2.3){
+        settled = true;
+        audioAvailabilityCache.set(key, false);
+        if(btnEl) btnEl.disabled = false;
+        playTTSFallback(reading, btnEl, originalText, finish);
+      }
+    });
     audio.addEventListener('canplaythrough', ()=>{
+      if(settled) return; settled = true;
+      audioAvailabilityCache.set(key, true);
       if(btnEl){ btnEl.disabled = false; btnEl.textContent = originalText; }
       audio.play().catch(()=>{});
       audio.addEventListener('ended', finish, { once:true });
     }, { once:true });
     audio.addEventListener('error', ()=>{
-      if(btnEl){ btnEl.disabled = false; btnEl.textContent = originalText; }
-      finish();
-    }, { once:true });
-    return;
-  }
-  if(audioAvailabilityCache.get(key) === false){
-    playTTSFallback(reading, btnEl, originalText, finish);
-    return;
-  }
-  if(btnEl){ btnEl.textContent = '⏳ Loading…'; btnEl.disabled = true; }
-  const audio = new Audio(audioURLFor(audioExpr, reading));
-  audio.preload = 'auto';
-  let settled = false;
-  // This audio source returns a real, playable MP3 even for words it
-  // doesn't have -- a spoken message saying the recording isn't available
-  // yet, rather than a proper HTTP error. Since that can't be distinguished
-  // from real audio by the request succeeding, this uses duration as a
-  // practical heuristic instead: genuine single-word pronunciations are
-  // short, while that placeholder message is a longer spoken sentence.
-  audio.addEventListener('loadedmetadata', ()=>{
-    if(settled) return;
-    if(audio.duration && audio.duration > 2.3){
-      settled = true;
+      if(settled) return; settled = true;
       audioAvailabilityCache.set(key, false);
+      if(btnEl) btnEl.disabled = false;
       playTTSFallback(reading, btnEl, originalText, finish);
-    }
+    }, { once:true });
   });
-  audio.addEventListener('canplaythrough', ()=>{
-    if(settled) return; settled = true;
-    audioAvailabilityCache.set(key, true);
-    if(btnEl){ btnEl.disabled = false; btnEl.textContent = originalText; }
-    audio.play().catch(()=>{});
-    audio.addEventListener('ended', finish, { once:true });
-  }, { once:true });
-  audio.addEventListener('error', ()=>{
-    if(settled) return; settled = true;
-    audioAvailabilityCache.set(key, false);
-    playTTSFallback(reading, btnEl, originalText, finish);
-  }, { once:true });
 }
 // Plays each reading in sequence (7, for example, has two valid readings --
 // なな and しち -- and both should be heard, one after the other, every
@@ -11513,14 +11559,18 @@ visitedTabs.add('search');
 if(!restoreUIStateOnBoot()) runSearch();
 setTimeout(()=>{ const inp = document.getElementById('search-input'); if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } }, 30);
 </script>
-<!-- v1.9 loading-speed fix: jlpt_grammar.js (grammar-particle fallback
-     definitions) and freq_vocab_cloze_examples.js (the Sentences-modal
-     example bank) are only ever consulted from on-demand, user-triggered
-     functions in Jisho -- never during initial render -- every call site
-     already guards with `typeof X !== 'undefined'`. Moving these two large
-     files (~8MB combined) to the very end of body means they no longer
-     block the page from becoming visible and interactive; they simply
-     finish loading a moment later in the background. -->
+<!-- v1.9/v2.0 loading-speed fix: jp_glosses.js (Japanese-language definitions),
+     names.js (name-reading matches), jlpt_grammar.js (grammar-particle
+     fallback definitions) and freq_vocab_cloze_examples.js (the
+     Sentences-modal example bank) are only ever consulted from on-demand,
+     guarded call sites (`typeof X !== 'undefined'`) -- never during initial
+     render. Moving these ~40MB combined to the very end of body means they
+     no longer block the page from becoming visible and interactive; they
+     simply finish loading a moment later in the background, and Japanese
+     definitions/name-matching/grammar-fallback/example-sentence features
+     quietly start working once they arrive. -->
+<script src="../../data/jp_glosses.js"></script>
+<script src="../../data/names.js"></script>
 <script src="../../data/jlpt_grammar.js"></script>
 <script src="../../data/freq_vocab_cloze_examples.js"></script>
 <script>
