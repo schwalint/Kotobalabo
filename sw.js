@@ -6,7 +6,7 @@
 // data/ files change. Bumping one never forces users to re-download the
 // other -- in particular, a shell update never re-triggers the ~150MB+ of
 // data downloads.
-const SHELL_VERSION = 'v2.0.3';
+const SHELL_VERSION = 'v2.0.4';
 const DATA_VERSION = 'v2.0.0';
 const SHELL_CACHE = `kotoba-labo-shell-${SHELL_VERSION}`;
 const DATA_CACHE = `kotoba-labo-data-${DATA_VERSION}`;
@@ -121,17 +121,33 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // App shell: network-first so edits show up right away when online, with
-  // a cache fallback for offline use.
+  // App shell: stale-while-revalidate. This used to be network-first, which
+  // meant every single page open -- even with everything cached -- waited
+  // on a full network round-trip before showing anything, since the cache
+  // was only ever a fallback for when that request failed. Now a cached
+  // copy (once one exists) is served immediately, while a fresh copy is
+  // fetched in the background to update the cache for *next* time. A code
+  // update still reaches you -- just on the following load instead of
+  // blocking the current one.
   event.respondWith(
-    fetch(req)
-      .then((res) => {
-        if (res && res.ok) {
-          const resClone = res.clone();
-          caches.open(SHELL_CACHE).then((cache) => cache.put(req, resClone));
+    caches.open(SHELL_CACHE).then((cache) =>
+      cache.match(req).then((cached) => {
+        const network = fetch(req)
+          .then((res) => {
+            if (res && res.ok) cache.put(req, res.clone());
+            return res;
+          })
+          .catch(() => cached || caches.match('./index.html'));
+        // If we already have a cached copy, return it immediately and keep
+        // the background refetch alive with waitUntil -- otherwise the
+        // browser can tear down this worker before that fetch/cache.put
+        // finishes, since nothing else is holding the event open for it.
+        if (cached) {
+          event.waitUntil(network);
+          return cached;
         }
-        return res;
+        return network;
       })
-      .catch(() => caches.match(req).then((cached) => cached || caches.match('./index.html')))
+    )
   );
 });

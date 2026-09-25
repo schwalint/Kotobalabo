@@ -47,27 +47,6 @@
   .mode-card .jp{ font-family:'Shippori Mincho', serif; font-size:40px; font-weight:700; color:#ffffff; line-height:1.1; }
   .mode-card .en{ display:block; margin-top:4px; font-family:'Space Grotesk', sans-serif; font-size:16px; font-weight:600; color:#ffffff; letter-spacing:.06em; text-transform:uppercase; opacity:.92; }
   .footer-note{ text-align:center; margin-top:36px; font-size:12px; color:var(--text-faint); }
-
-  .offline-card{
-    margin-top:28px; padding:16px 18px; border-radius:14px;
-    background:var(--panel); border:1px solid var(--border);
-  }
-  .offline-card .offline-row{ display:flex; align-items:center; gap:12px; justify-content:space-between; }
-  .offline-card .offline-label{ font-size:13px; color:var(--text-dim); line-height:1.4; }
-  .offline-card .offline-label b{ color:var(--text); font-weight:600; }
-  #btn-download-offline{
-    flex-shrink:0; background:var(--accent); color:#fff; border:none; border-radius:10px;
-    padding:10px 16px; font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:600;
-    cursor:pointer; white-space:nowrap; transition:filter .15s ease;
-  }
-  #btn-download-offline:hover{ filter:brightness(1.1); }
-  #btn-download-offline:disabled{ opacity:0.6; cursor:default; }
-  #btn-download-offline.done{ background:#2f7d4f; }
-  .offline-progress-wrap{ display:none; margin-top:12px; }
-  .offline-progress-wrap.visible{ display:block; }
-  .offline-progress-bar{ height:6px; border-radius:4px; background:var(--panel2); overflow:hidden; }
-  .offline-progress-fill{ height:100%; width:0%; background:var(--accent); transition:width .2s ease; }
-  .offline-progress-text{ margin-top:6px; font-size:11px; color:var(--text-faint); font-family:'Space Grotesk',sans-serif; }
 </style>
 </head>
 <body>
@@ -90,16 +69,6 @@
         <span class="en">Pitch Accent</span>
       </a>
     </div>
-    <div class="offline-card">
-      <div class="offline-row">
-        <div class="offline-label" id="offline-label"><b>Download for offline use</b><br>Fetches all dictionary, grammar and audio data (~190MB) so every mode works with no connection.</div>
-        <button id="btn-download-offline">⬇ Download</button>
-      </div>
-      <div class="offline-progress-wrap" id="offline-progress-wrap">
-        <div class="offline-progress-bar"><div class="offline-progress-fill" id="offline-progress-fill"></div></div>
-        <div class="offline-progress-text" id="offline-progress-text"></div>
-      </div>
-    </div>
     <div class="footer-note">KotobaLabo_v2.0</div>
   </div>
 
@@ -109,95 +78,6 @@
       navigator.serviceWorker.register('./sw.js').catch((err) => {
         console.warn('Service worker registration failed:', err);
       });
-    });
-  }
-
-  /* ============ DOWNLOAD FOR OFFLINE USE ============
-     All 3 modes share one data/ folder, so this lives once here on the
-     landing page rather than being duplicated per mode. The actual file
-     list and caching logic live in sw.js (see the 'message' listener
-     there) so there's a single source of truth for what "everything" means
-     and which cache it goes into -- this page just asks for it and shows
-     progress. Approximate per-file sizes below are for the progress bar
-     only (byte-weighted rather than a flat per-file count, since one file
-     is ~100MB and the rest are comparatively tiny) -- they don't need to be
-     exact, just roughly proportional. */
-  const OFFLINE_FILE_SIZES = {
-    'data.js': 17706130, 'freq.js': 3161129, 'glosses.js': 17333732,
-    'jp_glosses.js': 12099901, 'names.js': 19508889, 'user_audio.js': 424613,
-    'jlpt_vocab_tags.js': 273063, 'jlpt_grammar.js': 2233974,
-    'freq_vocab_cloze_examples.js': 6262947, 'kanji_dict.js': 6910021,
-    'anki_word_audio.js': 101304903, 'shared_sentences.json': 45
-  };
-  const OFFLINE_TOTAL_BYTES = Object.values(OFFLINE_FILE_SIZES).reduce((a,b)=>a+b, 0);
-  const OFFLINE_DONE_KEY = 'kotobaLaboOfflineDownloaded';
-
-  const btnOffline = document.getElementById('btn-download-offline');
-  const progressWrap = document.getElementById('offline-progress-wrap');
-  const progressFill = document.getElementById('offline-progress-fill');
-  const progressText = document.getElementById('offline-progress-text');
-
-  function setOfflineDone(){
-    btnOffline.textContent = '✓ Available offline';
-    btnOffline.classList.add('done');
-    btnOffline.disabled = false;
-    try{ localStorage.setItem(OFFLINE_DONE_KEY, '1'); }catch(e){}
-  }
-
-  if (!('serviceWorker' in navigator)) {
-    btnOffline.disabled = true;
-    btnOffline.textContent = 'Not supported in this browser';
-  } else {
-    try{ if(localStorage.getItem(OFFLINE_DONE_KEY) === '1') setOfflineDone(); }catch(e){}
-
-    navigator.serviceWorker.addEventListener('message', (event) => {
-      const msg = event.data;
-      if (!msg) return;
-      if (msg.type === 'CACHE_ALL_DATA_PROGRESS') {
-        const sizeSoFar = Object.keys(OFFLINE_FILE_SIZES)
-          .slice(0, msg.done)
-          .reduce((sum, key) => sum + OFFLINE_FILE_SIZES[key], 0);
-        const pct = Math.min(100, Math.round((sizeSoFar / OFFLINE_TOTAL_BYTES) * 100));
-        progressFill.style.width = pct + '%';
-        progressText.textContent = `${msg.file} — ${msg.done}/${msg.total} files (${pct}%)${msg.ok ? '' : ' — failed, will retry next time'}`;
-      } else if (msg.type === 'CACHE_ALL_DATA_DONE') {
-        progressFill.style.width = '100%';
-        progressText.textContent = 'All set — everything is cached for offline use.';
-        setOfflineDone();
-      }
-    });
-
-    btnOffline.addEventListener('click', async () => {
-      if (!confirm('This downloads about 190MB of dictionary and audio data for full offline use. Continue?')) return;
-      btnOffline.disabled = true;
-      btnOffline.textContent = 'Downloading…';
-      progressWrap.classList.add('visible');
-      progressText.textContent = 'Starting…';
-      try {
-        const reg = await navigator.serviceWorker.ready;
-        let controller = navigator.serviceWorker.controller;
-        if (!controller) {
-          // First-ever visit: the service worker just installed but doesn't
-          // control this already-open page yet (it takes over on the next
-          // load). Wait briefly for that handoff instead of failing silently.
-          controller = await new Promise((resolve) => {
-            const onChange = () => { navigator.serviceWorker.removeEventListener('controllerchange', onChange); resolve(navigator.serviceWorker.controller); };
-            navigator.serviceWorker.addEventListener('controllerchange', onChange);
-            setTimeout(() => { navigator.serviceWorker.removeEventListener('controllerchange', onChange); resolve(navigator.serviceWorker.controller); }, 4000);
-          });
-        }
-        if (!controller) {
-          progressText.textContent = 'Please reload the page once, then try again (the app just installed itself).';
-          btnOffline.disabled = false;
-          btnOffline.textContent = '⬇ Download';
-          return;
-        }
-        controller.postMessage({ type: 'CACHE_ALL_DATA' });
-      } catch (err) {
-        progressText.textContent = 'Something went wrong starting the download. Please try again.';
-        btnOffline.disabled = false;
-        btnOffline.textContent = '⬇ Download';
-      }
     });
   }
 </script>
