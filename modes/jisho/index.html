@@ -323,6 +323,23 @@
   .modal-actions{ gap:8px; }
   .option-grid, .pitch-choice-grid{ gap:8px; }
   .source-picker, .passage-toolbar{ gap:8px; }
+
+  /* Search-result word rows: badges used to sit in one horizontal row next
+     to the Add button, which on a narrow screen ate so much width that the
+     word/definition column got squeezed and the definition preview ran
+     into them. Stacking the badges vertically (right next to the Add
+     button, in the same right-hand column) keeps that column narrow and
+     gives the word + definition the rest of the row's width back. */
+  .row-actions{
+    flex-direction:column;
+    align-items:flex-end;
+    gap:4px;
+    max-width:36%;
+  }
+  .row-actions .freq-badge, .row-actions .box-badge, .row-actions .srs-stage-badge{
+    font-size:9px; padding:2px 7px;
+  }
+  .row-actions .btn.small{ padding:5px 9px; font-size:10px; white-space:nowrap; }
 }
 </style>
 </head>

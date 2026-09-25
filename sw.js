@@ -6,7 +6,7 @@
 // data/ files change. Bumping one never forces users to re-download the
 // other -- in particular, a shell update never re-triggers the ~150MB+ of
 // data downloads.
-const SHELL_VERSION = 'v2.0.2';
+const SHELL_VERSION = 'v2.0.3';
 const DATA_VERSION = 'v2.0.0';
 const SHELL_CACHE = `kotoba-labo-shell-${SHELL_VERSION}`;
 const DATA_CACHE = `kotoba-labo-data-${DATA_VERSION}`;

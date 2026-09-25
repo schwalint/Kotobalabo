@@ -360,6 +360,23 @@
   .modal-actions{ gap:8px; }
   .option-grid, .pitch-choice-grid{ gap:8px; }
   .source-picker, .passage-toolbar{ gap:8px; }
+
+  /* Search-result word rows: badges used to sit in one horizontal row next
+     to the Add button, which on a narrow screen ate so much width that the
+     word/definition column got squeezed and the definition preview ran
+     into them. Stacking the badges vertically (right next to the Add
+     button, in the same right-hand column) keeps that column narrow and
+     gives the word + definition the rest of the row's width back. */
+  .row-actions{
+    flex-direction:column;
+    align-items:flex-end;
+    gap:4px;
+    max-width:36%;
+  }
+  .row-actions .freq-badge, .row-actions .box-badge, .row-actions .srs-stage-badge{
+    font-size:9px; padding:2px 7px;
+  }
+  .row-actions .btn.small{ padding:5px 9px; font-size:10px; white-space:nowrap; }
 }
 </style>
 </head>
@@ -3011,7 +3028,18 @@ function earliestHistoryOffset(){
 function renderStudyHistoryWidget(stats){
   const root = document.getElementById('progress-widget-root');
   let windowOffset = parseInt(root.dataset.windowOffset) || 0; // days; the window is centered on today+windowOffset
-  const WINDOW_PAST = 7, WINDOW_FUTURE = 7; // fewer, bigger bars than before ("zoomed in")
+  // Mobile fix: this chart is an SVG with width="100%" and a *fixed* viewBox
+  // -- on desktop the rendered width is close enough to that fixed viewBox
+  // that it barely scales, but on a narrow phone the browser has to squish
+  // the whole coordinate system down to fit, and because preserveAspectRatio
+  // is "none" that squish is horizontal-only: dots become ellipses and text
+  // gets visibly condensed, exactly like an image squeezed on its sides.
+  // Fewer days AND a viewBox measured from the real rendered width (so the
+  // scale factor stays ~1:1, see VBW below) fixes both the squish and the
+  // cramped, hard-to-read look in one go. Desktop is untouched -- it keeps
+  // the original fixed 15-day/600-wide chart exactly as before.
+  const isMobileChart = typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches;
+  const WINDOW_PAST = isMobileChart ? 3 : 7, WINDOW_FUTURE = isMobileChart ? 3 : 7;
   const PAN_LIMIT = 30; // you can move the window up to 1 month in either direction
   const streak = computeStreak();
 
@@ -3033,7 +3061,13 @@ function renderStudyHistoryWidget(stats){
       points.push({ offset, studied, due });
     }
     const maxVal = Math.max(1, ...points.map(p=>Math.max(p.studied,p.due)));
-    const VBW = 600, chartH = 90, topPad = 34, labelGap = 10;
+    let VBW = 600;
+    if(isMobileChart){
+      const existingSvg = root.querySelector('#progress-chart-svg');
+      const measured = existingSvg && existingSvg.parentElement ? existingSvg.parentElement.clientWidth : 0;
+      VBW = measured > 0 ? measured : 320; // sensible fallback if measured before layout
+    }
+    const chartH = 90, topPad = 34, labelGap = 10;
     const totalH = topPad + chartH + labelGap + 60;
     const slot = VBW / totalDays;
     function yFor(v){ return topPad + chartH - (v/maxVal)*chartH; }
